@@ -20,6 +20,11 @@ impl Iterator for PrimeFactor {
 
     fn next(&mut self) -> Option<Option<(usize, usize)>> {
         let p = self.primes.next()?;
+
+        if p*p > self.n {
+            return Some(Some((self.n, 1)));
+        }
+
         if self.n % p == 0 {
             let mut i = 0;
             while self.n % p == 0 {
@@ -33,6 +38,7 @@ impl Iterator for PrimeFactor {
     }
 }
 
+/// Add large remainder detection
 pub fn prime_factor(n: usize) -> impl Stream<Item = (usize, usize)> {
     let sieve = Sieve::new((n as f64).sqrt() as usize);
     let sieve_box = Box::new(sieve);
@@ -135,10 +141,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_prime_factor() {
-        let mut factors = prime_factor(98736); // 2*2*2*2*3*11*11*17
+        let mut factors = prime_factor(98_736); // 2*2*2*2*3*11*11*17
         assert_eq!(factors.next().await, Some((2, 4)));
         assert_eq!(factors.next().await, Some((3, 1)));
         assert_eq!(factors.next().await, Some((11, 2)));
         assert_eq!(factors.next().await, Some((17, 1)));
+    }
+    
+    #[tokio::test]
+    async fn test_prime_factor_large_prime() {
+        let mut factors = prime_factor(5_706_079_200_624); // 2*2*2*2*3*11*11*982_451_653
+        assert_eq!(factors.next().await, Some((2, 4)));
+        assert_eq!(factors.next().await, Some((3, 1)));
+        assert_eq!(factors.next().await, Some((11, 2)));
+        assert_eq!(factors.next().await, Some((982_451_653, 1)));
     }
 }
