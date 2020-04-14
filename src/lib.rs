@@ -9,15 +9,15 @@ pub fn primes_unbounded() -> impl Stream<Item = usize> {
 }
 
 mod utils {
-    use std::future::Future;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::stream::Stream;
     use tokio::sync::mpsc;
-    use tokio::task::{spawn_blocking, JoinError, JoinHandle};
+    use tokio::task::{spawn, JoinHandle};
 
     struct StreamWithJoinHandle<S: Stream, R> {
         stream: S,
+        #[allow(dead_code)]
         join_handle: JoinHandle<R>,
     }
 
@@ -33,15 +33,15 @@ mod utils {
         it: impl Iterator<Item = T> + Send + 'static,
     ) -> (impl Stream<Item = T> + 'static) {
         let (mut s, r) = mpsc::channel(1);
-
+        let join_handle: JoinHandle<Result<(), mpsc::error::SendError<T>>> = spawn(async move {
+            for x in it {
+                s.send(x).await?;
+            }
+            Ok(())
+        });
         StreamWithJoinHandle {
             stream: r,
-            join_handle: spawn_blocking(async move || -> Result<(), mpsc::error::SendError<T>> {
-                for x in it {
-                    s.send(x).await?;
-                }
-                Ok(())
-            }),
+            join_handle,
         }
     }
 }
@@ -50,11 +50,7 @@ mod utils {
 mod tests {
     use super::*;
 
-    use tokio::io::{self, stdout, AsyncWriteExt};
-    use tokio::join;
     use tokio::stream::StreamExt;
-    use tokio::task::{spawn, yield_now};
-    use tokio::time::{delay_for, Duration};
 
     #[tokio::test]
     async fn test_primes_unbounded() {
