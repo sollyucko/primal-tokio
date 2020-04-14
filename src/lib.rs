@@ -1,7 +1,7 @@
 #![feature(async_closure)]
 #![feature(type_ascription)]
 
-use primal::{Sieve, SievePrimes, Primes};
+use primal::{Primes, Sieve, SievePrimes};
 use tokio::stream::Stream;
 
 pub fn primes_unbounded() -> impl Stream<Item = usize> {
@@ -20,9 +20,15 @@ impl Iterator for PrimeFactor {
 
     fn next(&mut self) -> Option<Option<(usize, usize)>> {
         let p = self.primes.next()?;
+        
+        if self.n == 1 {
+            return None;
+        }
 
-        if p*p > self.n {
-            return Some(Some((self.n, 1)));
+        if p * p > self.n {
+            let result = Some(Some((self.n, 1)));
+            self.n = 1;
+            return result;
         }
 
         if self.n % p == 0 {
@@ -38,13 +44,16 @@ impl Iterator for PrimeFactor {
     }
 }
 
-/// Add large remainder detection
 pub fn prime_factor(n: usize) -> impl Stream<Item = (usize, usize)> {
     let sieve = Sieve::new((n as f64).sqrt() as usize);
     let sieve_box = Box::new(sieve);
     let sieve_ref = unsafe { &*(&*sieve_box as *const Sieve) };
     let primes = sieve_ref.primes_from(0);
-    utils::spawn_stream_from_iterator_yield(PrimeFactor { n, sieve_box, primes })
+    utils::spawn_stream_from_iterator_yield(PrimeFactor {
+        n,
+        sieve_box,
+        primes,
+    })
 }
 
 mod utils {
@@ -107,6 +116,9 @@ mod utils {
         r
     }
 
+    /// None => end of iterator
+    /// Some(None) => yield without value
+    /// Some(Some(...)) => value
     pub fn spawn_stream_from_iterator_yield<T: Send + 'static>(
         it: impl Iterator<Item = Option<T>> + Send + 'static,
     ) -> (impl Stream<Item = T> + 'static) {
@@ -146,8 +158,9 @@ mod tests {
         assert_eq!(factors.next().await, Some((3, 1)));
         assert_eq!(factors.next().await, Some((11, 2)));
         assert_eq!(factors.next().await, Some((17, 1)));
+        assert_eq!(factors.next().await, None);
     }
-    
+
     #[tokio::test]
     async fn test_prime_factor_large_prime() {
         let mut factors = prime_factor(5_706_079_200_624); // 2*2*2*2*3*11*11*982_451_653
@@ -155,5 +168,6 @@ mod tests {
         assert_eq!(factors.next().await, Some((3, 1)));
         assert_eq!(factors.next().await, Some((11, 2)));
         assert_eq!(factors.next().await, Some((982_451_653, 1)));
+        assert_eq!(factors.next().await, None);
     }
 }
