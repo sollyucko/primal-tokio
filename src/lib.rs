@@ -69,7 +69,7 @@ mod utils {
             ClosedNoValue,
             Closed(T),
             Full(T),
-            Timeout(T),
+            //Timeout(T),
         }
 
         impl<T> From<ClosedError> for MpscSendError<T> {
@@ -84,14 +84,14 @@ mod utils {
             }
         }
 
-        impl<T> From<SendTimeoutError<T>> for MpscSendError<T> {
+        /*impl<T> From<SendTimeoutError<T>> for MpscSendError<T> {
             fn from(err: SendTimeoutError<T>) -> Self {
                 match err {
                     SendTimeoutError::Timeout(x) => Self::Timeout(x),
                     SendTimeoutError::Closed(x) => Self::Closed(x),
                 }
             }
-        }
+        }*/
 
         impl<T> From<TrySendError<T>> for MpscSendError<T> {
             fn from(err: TrySendError<T>) -> Self {

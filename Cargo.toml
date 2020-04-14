@@ -3,9 +3,16 @@ name = "primal-tokio"
 version = "0.1.0"
 authors = ["Solomon Ucko <solly.ucko@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+keywords = ["primal", "prime", "tokio", "stream"]
+categories = ["asynchronous", "concurrency", "mathematics"]
+description = "An interface to primal using tokio's streams. This allows the worker to stop once the receiver is dropped, for example."
+license = "CC0-1.0"
+repository = "https://github.com/sollyucko/primal-tokio"
+readme = "README.md"
 
 [dependencies]
 primal = "0.2"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "0.2", features = ["rt-core", "stream", "sync"] }
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["rt-core", "stream", "sync", "macros"] }
