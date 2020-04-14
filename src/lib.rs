@@ -5,7 +5,7 @@ use primal::Primes;
 use tokio::stream::Stream;
 
 pub fn primes_unbounded() -> impl Stream<Item = usize> {
-    utils::spawn_stream_from_iterator_bounded_buffer(Primes::all(), 1)
+    utils::spawn_stream_from_iterator(Primes::all())
 }
 
 mod utils {
@@ -13,32 +13,19 @@ mod utils {
     use tokio::sync::mpsc;
     use tokio::task::spawn_blocking;
 
-    macro_rules! spawn_stream_from_iterator_common {
-        ($name:ident($($extra_args:tt)*) => $channel:expr; { $($send_extra:tt)* }) => {
-            pub fn $name<T : Send + 'static>(
-                it: impl Iterator<Item = T> + Send + 'static,
-                $($extra_args)*
-            ) -> impl Stream<Item = T> + 'static {
-                #[allow(unused_mut)]
-                let (mut s, r) = $channel;
-                spawn_blocking(async move || -> Result<(), mpsc::error::SendError<T>> {
-                    for x in it {
-                        s.send(x)$($send_extra)*?;
-                    }
-                    Ok(())
-                });
-                r
+    pub fn spawn_stream_from_iterator<T: Send + 'static>(
+        it: impl Iterator<Item = T> + Send + 'static,
+    ) -> impl Stream<Item = T> + 'static {
+        #[allow(unused_mut)]
+        let (mut s, r) = mpsc::channel(1);
+        spawn_blocking(async move || -> Result<(), mpsc::error::SendError<T>> {
+            for x in it {
+                s.send(x).await?;
             }
-        }
+            Ok(())
+        });
+        r
     }
-
-    spawn_stream_from_iterator_common! {
-        spawn_stream_from_iterator_bounded_buffer(buffer_size: usize) => mpsc::channel(buffer_size); {.await}
-    }
-
-    /*spawn_stream_from_iterator_common! {
-        spawn_stream_from_iterator_unbounded_buffer() => mpsc::unbounded_channel(); {}
-    }*/
 }
 
 #[cfg(test)]
