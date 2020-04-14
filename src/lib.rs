@@ -9,27 +9,40 @@ pub fn primes_unbounded() -> impl Stream<Item = usize> {
 }
 
 mod utils {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
     use tokio::stream::Stream;
     use tokio::sync::mpsc;
     use tokio::task::{spawn_blocking, JoinError, JoinHandle};
-    use std::future::Future;
+
+    struct StreamWithJoinHandle<S: Stream, R> {
+        stream: S,
+        join_handle: JoinHandle<R>,
+    }
+
+    impl<S: Stream, R> Stream for StreamWithJoinHandle<S, R> {
+        type Item = S::Item;
+
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
+            unsafe { self.map_unchecked_mut(|x| &mut x.stream) }.poll_next(cx)
+        }
+    }
 
     pub fn spawn_stream_from_iterator<T: Send + 'static>(
         it: impl Iterator<Item = T> + Send + 'static,
-    ) -> (
-        impl Future<Output = Result<impl Future<Output = Result<(), mpsc::error::SendError<T>>>, JoinError>>,
-        impl Stream<Item = T> + 'static,
-    ) {
+    ) -> (impl Stream<Item = T> + 'static) {
         let (mut s, r) = mpsc::channel(1);
-        (
-            spawn_blocking(async move || -> Result<(), mpsc::error::SendError<T>> {
+
+        StreamWithJoinHandle {
+            stream: r,
+            join_handle: spawn_blocking(async move || -> Result<(), mpsc::error::SendError<T>> {
                 for x in it {
                     s.send(x).await?;
                 }
                 Ok(())
             }),
-            r,
-        )
+        }
     }
 }
 
