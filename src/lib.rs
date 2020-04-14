@@ -9,40 +9,21 @@ pub fn primes_unbounded() -> impl Stream<Item = usize> {
 }
 
 mod utils {
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
     use tokio::stream::Stream;
     use tokio::sync::mpsc;
-    use tokio::task::{spawn, JoinHandle};
-
-    struct StreamWithJoinHandle<S: Stream, R> {
-        stream: S,
-        #[allow(dead_code)]
-        join_handle: JoinHandle<R>,
-    }
-
-    impl<S: Stream, R> Stream for StreamWithJoinHandle<S, R> {
-        type Item = S::Item;
-
-        fn poll_next(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
-            unsafe { self.map_unchecked_mut(|x| &mut x.stream) }.poll_next(cx)
-        }
-    }
+    use tokio::task::spawn;
 
     pub fn spawn_stream_from_iterator<T: Send + 'static>(
         it: impl Iterator<Item = T> + Send + 'static,
     ) -> (impl Stream<Item = T> + 'static) {
         let (mut s, r) = mpsc::channel(1);
-        let join_handle: JoinHandle<Result<(), mpsc::error::SendError<T>>> = spawn(async move {
+        spawn(async move {
             for x in it {
                 s.send(x).await?;
             }
-            Ok(())
+            Ok::<(), mpsc::error::SendError<T>>(())
         });
-        StreamWithJoinHandle {
-            stream: r,
-            join_handle,
-        }
+        r
     }
 }
 
